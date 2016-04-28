@@ -1,0 +1,26 @@
+{
+  "name": "aws-lambda-project-boilerplate",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "test": "mocha",
+    "typings": "typings install",
+    "postinstall": "npm run typings"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "chai": "^3.5.0",
+    "gulp": "^3.9.1",
+    "gulp-clean": "^0.3.2",
+    "gulp-istanbul": "^0.10.4",
+    "gulp-mocha": "^2.2.0",
+    "gulp-newer": "^1.1.0",
+    "gulp-spawn": "github:gmahomarf/gulp-spawn",
+    "gulp-typescript": "^2.13.0",
+    "sinon": "^1.17.3",
+    "sinon-chai": "^2.8.0",
+    "typings": "^0.8.1",
+    "vinyl-fs": "^2.4.3"
+  }
+}
