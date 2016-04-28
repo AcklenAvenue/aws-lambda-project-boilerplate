@@ -23,5 +23,5 @@ The Lambda programming model boils down to this:
 - Each Lambda function is run in a stateless environment. This means that you shouldn't make any assumptions or have any expectations about hosting environment.
 - Each Lambda function contains one or more files containing code that must all be available from the beginning (including dependencies, such as npm packages). In one of those files, there needs to be a function to handle the event. What that handler is is defined in the Lambda function configuration.
 - Handler functions are the single entry point into a Lambda function. They can, however, call any code contained in any of the other files.
-- Handler functions receive the event data as the first argument.
+- Handler functions receive the event data as the first argument. The format of this data is defined by the developer.
 - Handler functions also receive a context object that allows them to interact with Lambda at run time. (See **Programming Model** above)
