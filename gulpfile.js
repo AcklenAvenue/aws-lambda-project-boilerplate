@@ -29,7 +29,7 @@ gulp.task('install-typings', function(done) {
 });
 
 gulp.task('compile-src', function() {
-    compileTypescript('src');
+    return compileTypescript('src');
 });
 
 gulp.task('istanbul-setup', ['compile-src'], function () {
