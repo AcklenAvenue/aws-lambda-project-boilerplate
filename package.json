@@ -2,8 +2,7 @@
   "name": "aws-lambda-project-boilerplate",
   "version": "1.0.0",
   "description": "",
-  "scripts": {
-  },
+  "scripts": {},
   "author": "",
   "license": "ISC",
   "devDependencies": {
@@ -12,6 +11,7 @@
     "del": "^1.1.0",
     "gulp": "^3.9.1",
     "gulp-clean": "^0.3.2",
+    "gulp-debug": "^2.1.2",
     "gulp-install": "^0.2.0",
     "gulp-istanbul": "^0.10.4",
     "gulp-mocha": "^2.2.0",
