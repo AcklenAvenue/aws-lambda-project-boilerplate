@@ -56,18 +56,111 @@ gulp.task('upload', function(done) {
     var params = {
         FunctionName: functionName,
         Handler: 'handler.handler',
-        Role: 'arn:aws:iam::487799950875:role/lambda_basic_execution',
+        Role: 'arn:aws:iam::<IDDDDDDDD>:role/lambda-gateway-execution-role',
         Runtime: 'nodejs4.3',
         Code: {}
     };
 
     fs.readFile('./dist.zip', function(err, data) {
         params.Code['ZipFile'] = data;
-        lambda.createFunction(params, function(err, data) {
+        lambda.createFunction(params, function(err, dataCreateFunction) {
             if (err) {
                 console.log(err);
             }
-            done();
+            var api = new AWS.APIGateway();
+
+            var params = {
+              name: 'testapi'
+            };
+            var pathPart = 'test';
+            var httpMethod = 'POST';
+            api.createRestApi(params, function(err, dataCreateRestAPI) {
+              if (err){
+                console.log(err, err.stack); // an error occurred
+              }
+              else{
+                  console.log(dataCreateRestAPI);
+                  var params = {
+                    restApiId: dataCreateRestAPI.id
+                  };
+                  api.getResources(params, function(err, dataGetResources) {
+                    if (err){
+                      console.log(err, err.stack);
+                    }
+                    else{
+                      console.log('GET RESOURCES');
+                      console.log(dataGetResources);
+
+                      var params = {
+                        parentId: dataGetResources.items[0].id,
+                        pathPart: pathPart,
+                        restApiId: dataCreateRestAPI.id
+                      };
+                      api.createResource(params, function(err, dataCreateResource) {
+                        if (err){
+                          console.log(err, err.stack);
+                        }
+                        else{
+                          console.log('CREATE RESOURCE');
+                          console.log(dataCreateResource);
+
+                          var params = {
+                            authorizationType: 'NONE',
+                            httpMethod: httpMethod,
+                            resourceId: dataCreateResource.id,
+                            restApiId: dataCreateRestAPI.id,
+                            apiKeyRequired: false,
+                          };
+                          api.putMethod(params, function(err, dataPutMethod) {
+                            if (err){
+                              console.log(err);
+                            }
+                            else{
+                              var params = {
+                                  httpMethod: httpMethod,
+                                  resourceId: dataCreateResource.id,
+                                  restApiId: dataCreateRestAPI.id,
+                                  type: 'AWS',
+                                  uri: 'arn:aws:apigateway:us-east-1:lambda:path/2015-07-09/functions/arn:aws:lambda:us-east-1:<IDDDDDDDD>:function:'+functionName+'/invocations',
+                                  // uri: 'https://lambda.us-east-1.amazonaws.com/2015-03-31/functions/arn:aws:lambda:::function:'+functionName+'/invocations',
+                                  integrationHttpMethod: httpMethod
+                                  //credentials : dataCreateFunction.Role
+                              };
+                              console.log('PARAMS');
+                              console.log(params);
+                              api.putIntegration(params, function (err, data) {
+                                  if (err) {
+                                      console.log('AWS Error', err);
+                                  } else {
+                                      console.log('Put Integration Method Created', data);
+
+                                      var params = {
+                                        Action: 'lambda:*',
+                                        FunctionName: functionName,
+                                        Principal: 'apigateway.amazonaws.com',
+                                        StatementId: 'apigateway-prod-2',
+                                        SourceArn: 'arn:aws:execute-api:us-east-1:<IDDDDDDDD>:/prod/POST/test'
+                                      };
+                                      console.log('PARAMS ADD PERMISSION');
+                                      console.log(params);
+                                      lambda.addPermission(params, function(err, data) {
+                                        if (err){
+                                          console.log(err, err.stack); // an error occurred
+                                        }
+                                        else{
+                                          console.log(data);
+                                        }
+                                      });
+                                  }
+                              });
+                            }
+                          });
+                        }
+                      });
+                    }
+                  });
+              }
+            });
         });
     });
 });
