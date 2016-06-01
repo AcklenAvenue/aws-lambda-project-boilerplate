@@ -10,19 +10,31 @@ var runSequence = require('run-sequence');
 var newer = require('gulp-newer');
 var tsc = require('gulp-typescript');
 var debug = require('gulp-debug');
+var merge = require('merge-stream');
+var path = require('path');
+const functionsPath = './src';
 
-var compileTypescript = function(srcPath) {
-    return gulp.src([srcPath + '/**/*.ts', '!' + srcPath + '/**/*.d.ts'])
-        .pipe(newer({
-            dest: './dist',
-            ext: '.js'
-        }))
-        .pipe(tsc())
-        .pipe(gulp.dest('./dist'));
+const listChildDirectoryPaths = function(directoryPath) {
+    return fs.readdirSync(directoryPath).filter(function(pathPart) {
+        return fs.statSync(path.join(directoryPath, pathPart)).isDirectory();
+    });
+}
+
+const compileTypescript = function() {
+    const lambdas = listChildDirectoryPaths(functionsPath).map(function(directoryPath) {
+        return gulp.src([functionsPath + '/' + directoryPath + '/**/*.ts', '!' + directoryPath + '/**/*.d.ts'])
+            .pipe(newer({
+                dest: 'dist/' + directoryPath,
+                ext: '.js'
+            }))
+            .pipe(tsc())
+            .pipe(gulp.dest('dist/' + directoryPath));
+    });
+    return merge(lambdas);
 };
 
 gulp.task('compile-src', function() {
-    return compileTypescript('src');
+    return compileTypescript();
 });
 
 // First we need to clean out the dist folder and remove the compiled zip file.
@@ -34,150 +46,48 @@ gulp.task('clean', function(cb) {
 
 // Here we want to install npm packages to dist, ignoring devDependencies.
 gulp.task('npm', function() {
-    return gulp.src('./package.json')
-        .pipe(gulp.dest('./dist/greeter/'))
-        .pipe(install({
-            production: true
-        }));
+    var tasks = listChildDirectoryPaths(functionsPath).map(function(directoryPath) {
+        return gulp.src('./package.json')
+            .pipe(gulp.dest('dist/' + directoryPath))
+            .pipe(install({
+                production: true
+            }));
+    });
+    return merge(tasks);
 });
 
 // Now the dist directory is ready to go. Zip it.
 gulp.task('zip', function() {
-    return gulp.src(['dist/greeter/**/*', '!dist/package.json'])
-        .pipe(zip('dist.zip'))
-        .pipe(gulp.dest('./'));
+    const lambdas = listChildDirectoryPaths(functionsPath).map(function(directoryPath) {
+        return gulp.src(['dist/' + directoryPath+ '/**/*', '!dist/' + directoryPath + 'package.json'])
+            .pipe(zip('dist.zip'))
+            .pipe(gulp.dest('dist/' + directoryPath));
+    });
+    return merge(lambdas);
 });
 
 gulp.task('upload', function(done) {
     AWS.config.region = 'us-east-1';
-    var lambda = new AWS.Lambda();
-    var functionName = 'hello-world';
-
-    var params = {
-        FunctionName: functionName,
-        Handler: 'handler.handler',
-        Role: 'arn:aws:iam::487799950875:role/lambda-gateway-execution-role',
-        Runtime: 'nodejs4.3',
-        Code: {}
-    };
-
-    fs.readFile('./dist.zip', function(err, data) {
-        params.Code['ZipFile'] = data;
-        lambda.createFunction(params, function(err, dataCreateFunction) {
-            if (err) {
-                console.log(err);
-            }
-            var api = new AWS.APIGateway();
+    const lambda = new AWS.Lambda();
+    const functionName = 'hello-world';
+    const api = new AWS.APIGateway();
+    listChildDirectoryPaths(functionsPath).map(function(directoryPath) {
+        fs.readFile('dist/' + directoryPath + '/dist.zip', function(err, data) {
             var params = {
-                name: 'testapi'
+                FunctionName: directoryPath,
+                Handler: 'handler.handler',
+                Role: 'arn:aws:iam::487799950875:role/lambda-gateway-execution-role',
+                Runtime: 'nodejs4.3',
+                Code: {}
             };
-            var pathPart = 'test';
-            var httpMethod = 'POST';
-            api.createRestApi(params, function(err, dataCreateRestAPI) {
+            params.Code['ZipFile'] = data;
+            lambda.createFunction(params, function(err, dataCreateFunction) {
                 if (err) {
-                    console.log(err, err.stack);
-                } else {
-                    console.log(dataCreateRestAPI);
-                    var params = {
-                        restApiId: dataCreateRestAPI.id
-                    };
-                    api.getResources(params, function(err, dataGetResources) {
-                        if (err) {
-                            console.log(err, err.stack);
-                        } else {
-                            console.log('GET RESOURCES', dataGetResources);
-
-                            var params = {
-                                parentId: dataGetResources.items[0].id,
-                                pathPart: pathPart,
-                                restApiId: dataCreateRestAPI.id
-                            };
-                            api.createResource(params, function(err, dataCreateResource) {
-                                if (err) {
-                                    console.log(err, err.stack);
-                                } else {
-                                    console.log('CREATE RESOURCE', dataCreateResource);
-
-                                    var params = {
-                                        authorizationType: 'NONE',
-                                        httpMethod: httpMethod,
-                                        resourceId: dataCreateResource.id,
-                                        restApiId: dataCreateRestAPI.id,
-                                        apiKeyRequired: false,
-                                    };
-                                    api.putMethod(params, function(err, dataPutMethod) {
-                                        if (err) {
-                                            console.log(err);
-                                        } else {
-                                            var params = {
-                                                httpMethod: httpMethod,
-                                                resourceId: dataCreateResource.id,
-                                                restApiId: dataCreateRestAPI.id,
-                                                type: 'AWS',
-                                                uri: 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:487799950875:function:' + functionName + '/invocations',
-                                                integrationHttpMethod: httpMethod
-                                            };
-                                            api.putIntegration(params, function(err, data) {
-                                                if (err) {
-                                                    console.log('AWS Error', err);
-                                                } else {
-                                                    console.log('Put Integration Method Created', data);
-
-                                                    var params = {
-                                                        Action: 'lambda:*',
-                                                        FunctionName: functionName,
-                                                        Principal: 'apigateway.amazonaws.com',
-                                                        StatementId: 'apigateway-prod-2',
-                                                        SourceArn: 'arn:aws:execute-api:us-east-1:487799950875:' + dataCreateRestAPI.id + '/*/POST/test'
-                                                    };
-                                                    console.log('PARAMS ADD PERMISSION', params);
-                                                    lambda.addPermission(params, function(err, data) {
-                                                        if (err) {
-                                                            console.log(err, err.stack);
-                                                        } else {
-                                                            console.log(data);
-                                                            var params = {
-                                                                httpMethod: 'POST',
-                                                                resourceId: dataCreateResource.id,
-                                                                restApiId: dataCreateRestAPI.id,
-                                                                statusCode: '200',
-                                                                responseModels: {
-                                                                    'application/json': 'Empty',
-                                                                },
-                                                            };
-                                                            api.putMethodResponse(params, function(err, data) {
-                                                                if (err) {
-                                                                    console.log(err, err.stack);
-                                                                } else {
-                                                                    console.log('yay', data);
-                                                                    var params = {
-                                                                        httpMethod: 'POST',
-                                                                        resourceId: dataCreateResource.id,
-                                                                        restApiId: dataCreateRestAPI.id,
-                                                                        statusCode: '200',
-                                                                        responseTemplates: {
-                                                                            'application/json': '',
-                                                                        }
-                                                                    };
-                                                                    api.putIntegrationResponse(params, function(err, data) {                                                                        if (err) {
-                                                                            console.log(err, err.stack);
-                                                                        } else {
-                                                                            console.log(data);
-                                                                        }
-                                                                    });
-                                                                }
-                                                            });
-                                                        }
-                                                    });
-                                                }
-                                            });
-                                        }
-                                    });
-                                }
-                            });
-                        }
-                    });
+                    console.log(err);
                 }
+                var params = {
+                    name: 'testapi'
+                };
             });
         });
     });
