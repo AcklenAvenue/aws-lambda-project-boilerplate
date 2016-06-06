@@ -41,3 +41,5 @@ jspm_packages
 /src/**/*.d.ts
 /tests/**/*.js
 /tests/**/*.d.ts
+/dist/
+/dist.zip
