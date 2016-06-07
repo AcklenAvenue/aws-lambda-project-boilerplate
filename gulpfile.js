@@ -14,11 +14,18 @@ var path = require('path');
 var BlueBird = require('bluebird');
 var config = require('./gulp.config');
 var swagger = require('./swagger.json');
-
 var fs = BlueBird.promisifyAll(require('fs'));
+
 const functionsPath = './src';
-const apiName = 'aws-lambda-project-boilerplate';
 const accountIDPattern = /<<ACCT_ID>>/g;
+const apiName = path.basename(__dirname);
+swagger.info.title = apiName;
+
+AWS.config.update({
+  accessKeyId: config.awsAccessKeyId,
+  secretAccessKey: config.awsSecretAccessKey,
+  region: config.awsRegion
+});
 
 const listChildDirectoryPaths = function(directoryPath) {
     return fs.readdirSync(directoryPath).filter(function(pathPart) {
@@ -71,7 +78,6 @@ gulp.task('zip', function() {
 });
 
 gulp.task('upload', function(done) {
-    AWS.config.region = config.awsRegion;
     const lambda = BlueBird.promisifyAll(new AWS.Lambda(), {
         suffix: 'Promise'
     });
@@ -126,7 +132,6 @@ gulp.task('upload', function(done) {
 });
 
 gulp.task('deployApi', function(done) {
-    AWS.config.region = config.awsRegion;
     const api = new AWS.APIGateway();
 
     const promise = new BlueBird(function(resolve, reject) {

@@ -1,7 +1,7 @@
 module.exports = {
-    awsAccessKeyId: '',
-    awsSecretAccessKey: '',
-    awsAccountNumber: '',
-    awsRegion: 'us-east-1',
-    lambdaRole: 'lambda-gateway-execution-role'
+    awsAccessKeyId: process.env["awsAccessKeyId"],
+    awsSecretAccessKey: process.env["awsSecretAccessKey"],
+    awsAccountNumber: process.env["awsAccountNumber"],
+    awsRegion: process.env["awsRegion"],
+    lambdaRole: process.env["lambdaRole"]
 };
