@@ -12,9 +12,13 @@ var debug = require('gulp-debug');
 var merge = require('merge-stream');
 var path = require('path');
 var BlueBird = require('bluebird');
+var config = require('./gulp.config');
+var swagger = require('./swagger.json');
+
+var fs = BlueBird.promisifyAll(require('fs'));
 const functionsPath = './src';
 const apiName = 'aws-lambda-project-boilerplate';
-var fs = BlueBird.promisifyAll(require('fs'));
+const accountIDPattern = /<<ACCT_ID>>/g;
 
 const listChildDirectoryPaths = function(directoryPath) {
     return fs.readdirSync(directoryPath).filter(function(pathPart) {
@@ -67,7 +71,7 @@ gulp.task('zip', function() {
 });
 
 gulp.task('upload', function(done) {
-    AWS.config.region = 'us-east-1';
+    AWS.config.region = config.awsRegion;
     const lambda = BlueBird.promisifyAll(new AWS.Lambda(), {
         suffix: 'Promise'
     });
@@ -78,7 +82,7 @@ gulp.task('upload', function(done) {
             const lambdaFunctionParams = {
                 FunctionName: directoryPath,
                 Handler: 'handler.handler',
-                Role: 'arn:aws:iam::487799950875:role/lambda-gateway-execution-role',
+                Role: `arn:aws:iam::${config.awsAccountNumber}:role/${config.lambdaRole}`,
                 Runtime: 'nodejs4.3',
                 Code: {
                     ZipFile: lambdaCode
@@ -102,8 +106,7 @@ gulp.task('upload', function(done) {
                                 Action: 'lambda:*',
                                 FunctionName: lambdaFunctionParams.FunctionName,
                                 Principal: 'apigateway.amazonaws.com',
-                                StatementId: 'apigateway-prod-2',
-                                SourceArn: `arn:aws:execute-api:us-east-1:487799950875:${apiFilter.id}/*/GET/test`
+                                StatementId: 'apigateway-prod-2'
                             };
                             return lambda.addPermissionPromise(lambdaPermissions);
                         }
@@ -123,66 +126,64 @@ gulp.task('upload', function(done) {
 });
 
 gulp.task('deployApi', function(done) {
-    AWS.config.region = 'us-east-1';
+    AWS.config.region = config.awsRegion;
     const api = new AWS.APIGateway();
 
     const promise = new BlueBird(function(resolve, reject) {
-        fs.readFile('swagger.yml', function(err, swaggerFile) {
+        var swaggerBody = JSON.stringify(swagger)
+                              .replace(accountIDPattern,
+                                       config.awsAccountNumber);
+        api.getRestApis({}, function(err, apis) {
             if (err) {
                 return reject(err);
             }
-            api.getRestApis({}, function(err, apis) {
-                if (err) {
-                    return reject(err);
-                }
-                const filterApi = apis.items.filter(function(api) {
-                    return api.name === apiName;
-                })[0];
+            const filterApi = apis.items.filter(function(api) {
+                return api.name === apiName;
+            })[0];
 
-                if (filterApi) {
-                    const putApiParams = {
-                        body: swaggerFile,
-                        restApiId: filterApi.id,
-                        failOnWarnings: true,
-                        mode: 'overwrite'
+            if (filterApi) {
+                const putApiParams = {
+                    body: new Buffer(swaggerBody),
+                    restApiId: filterApi.id,
+                    failOnWarnings: true,
+                    mode: 'overwrite'
+                };
+                api.putRestApi(putApiParams, function(err, updatedApi) {
+                    if (err) {
+                        return reject(err);
+                    }
+                    const deploymentParams = {
+                        restApiId: updatedApi.id,
+                        stageName: 'beta'
                     };
-                    api.putRestApi(putApiParams, function(err, updatedApi) {
+                    api.createDeployment(deploymentParams, function(err, deploymentData) {
                         if (err) {
                             return reject(err);
                         }
-                        const deploymentParams = {
-                            restApiId: updatedApi.id,
-                            stageName: 'beta'
-                        };
-                        api.createDeployment(deploymentParams, function(err, deploymentData) {
-                            if (err) {
-                                return reject(err);
-                            }
-                            return resolve('Deployed Updated API Successfully');
-                        });
-                    })
-                } else {
-                    const importRestApiParams = {
-                        body: swaggerFile,
-                        failOnWarnings: true
-                    };
-                    api.importRestApi(importRestApiParams, function(err, apiData) {
-                        if (err) {
-                            return reject(err);
-                        }
-                        const deploymentParams = {
-                            restApiId: apiData.id,
-                            stageName: 'beta'
-                        };
-                        api.createDeployment(deploymentParams, function(err, deploymentData) {
-                            if (err) {
-                                return reject(err);
-                            }
-                            return resolve('Deployed API Successfully');
-                        });
+                        return resolve('Deployed Updated API Successfully');
                     });
-                }
-            });
+                })
+            } else {
+                const importRestApiParams = {
+                    body: new Buffer(swaggerBody),
+                    failOnWarnings: true
+                };
+                api.importRestApi(importRestApiParams, function(err, apiData) {
+                    if (err) {
+                        return reject(err);
+                    }
+                    const deploymentParams = {
+                        restApiId: apiData.id,
+                        stageName: 'beta'
+                    };
+                    api.createDeployment(deploymentParams, function(err, deploymentData) {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve('Deployed API Successfully');
+                    });
+                });
+            }
         });
     });
 

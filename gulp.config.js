@@ -1,4 +1,7 @@
 module.exports = {
     awsAccessKeyId: '',
-    awsSecretAccessKey: ''
+    awsSecretAccessKey: '',
+    awsAccountNumber: '',
+    awsRegion: 'us-east-1',
+    lambdaRole: 'lambda-gateway-execution-role'
 };
