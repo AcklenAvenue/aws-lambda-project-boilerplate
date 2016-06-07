@@ -6,6 +6,12 @@ This is a small project that works as a starting point for a project that will b
 npm install
 ```
 
+### Gulp tasks
+
+Run the default gulp task as ``gulp`` which will compile the files inside **src/** and put them inside **/dist**. It is important to know that the name given to the lambda function when deploying to aws will be the name of the folder containing the lambda function and its handler.
+
+For deploying the **lambda functions** and **gateway api** to AWS run ``gulp deploy``. This task imports the **swagger.json** which contains the api configuration and deploys it with the respective lambda functions.
+
 ##Introduction
 
 If you're new to Lambda, the next section contains a very general overview of how it works. You can also see these links for in-depth information:
