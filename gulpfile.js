@@ -5,7 +5,6 @@ var rename = require('gulp-rename');
 var install = require('gulp-install');
 var zip = require('gulp-zip');
 var AWS = require('aws-sdk');
-var fs = require('fs');
 var runSequence = require('run-sequence');
 var newer = require('gulp-newer');
 var tsc = require('gulp-typescript');
@@ -15,6 +14,7 @@ var path = require('path');
 var BlueBird = require('bluebird');
 const functionsPath = './src';
 const apiName = 'aws-lambda-project-boilerplate';
+var fs = BlueBird.promisifyAll(require('fs'));
 
 const listChildDirectoryPaths = function(directoryPath) {
     return fs.readdirSync(directoryPath).filter(function(pathPart) {
@@ -68,56 +68,53 @@ gulp.task('zip', function() {
 
 gulp.task('upload', function(done) {
     AWS.config.region = 'us-east-1';
-    const lambda = new AWS.Lambda();
-    const api = new AWS.APIGateway();
-    const promises = [];
+    const lambda = BlueBird.promisifyAll(new AWS.Lambda(), {
+        suffix: 'Promise'
+    });
+    const api = BlueBird.promisifyAll(new AWS.APIGateway());
 
-    listChildDirectoryPaths(functionsPath).map(function(directoryPath) {
-        promises.push(new BlueBird(function(resolve, reject) {
-            fs.readFile('dist/' + directoryPath + '/dist.zip', function(err, data) {
-                const lambdaFunction = {
-                    FunctionName: directoryPath,
-                    Handler: 'handler.handler',
-                    Role: 'arn:aws:iam::487799950875:role/lambda-gateway-execution-role',
-                    Runtime: 'nodejs4.3',
-                    Code: {
-                        ZipFile: data
-                    }
-                };
-                lambda.createFunction(lambdaFunction, function(err, dataCreateFunction) {
-                    if (err) {
-                        return reject(err);
-                    }
-                    api.getRestApis({}, function(err, data) {
-                        if (err) {
-                            return reject(err);
-                        }
-                        const api = data.items.filter(function(api) {
+    BlueBird.map(listChildDirectoryPaths(functionsPath), function(directoryPath) {
+        return fs.readFileAsync('dist/' + directoryPath + '/dist.zip').then(function(lambdaCode) {
+            const lambdaFunctionParams = {
+                FunctionName: directoryPath,
+                Handler: 'handler.handler',
+                Role: 'arn:aws:iam::487799950875:role/lambda-gateway-execution-role',
+                Runtime: 'nodejs4.3',
+                Code: {
+                    ZipFile: lambdaCode
+                }
+            };
+            return lambda.getFunctionPromise({
+                FunctionName: lambdaFunctionParams.FunctionName
+            }).then(function(lambdaFunction) {
+                return lambda.updateFunctionCodePromise({
+                    FunctionName: lambdaFunctionParams.FunctionName,
+                    ZipFile: lambdaCode
+                });
+            }, function(err) {
+                if (err.cause.code === 'ResourceNotFoundException') {
+                    return BlueBird.all([lambda.createFunctionPromise(lambdaFunctionParams), api.getRestApisAsync({})]).spread(function(lambdaFunc, apiFunc) {
+                        const apiFilter = apiFunc.items.filter(function(api) {
                             return api.name === apiName;
                         })[0];
-
-                        if (api) {
+                        if (apiFilter) {
                             const lambdaPermissions = {
                                 Action: 'lambda:*',
-                                FunctionName: lambdaFunction.FunctionName,
+                                FunctionName: lambdaFunctionParams.FunctionName,
                                 Principal: 'apigateway.amazonaws.com',
                                 StatementId: 'apigateway-prod-2',
-                                SourceArn: `arn:aws:execute-api:us-east-1:487799950875:${api.id}/*/GET/test`
+                                SourceArn: `arn:aws:execute-api:us-east-1:487799950875:${apiFilter.id}/*/GET/test`
                             };
-                            lambda.addPermission(lambdaPermissions, function(err, data) {
-                                if (err) {
-                                    return reject(err);
-                                }
-                                resolve(`added permissions to lambda: ${lambdaFunction.FunctionName}`);
-                            });
+                            return lambda.addPermissionPromise(lambdaPermissions);
                         }
                     });
-                });
+                } else {
+                    return BlueBird.reject(err);
+                }
             });
-        }));
-    });
-    BlueBird.all(promises).then(function(success) {
-        gutil.log(gutil.colors.green(success));
+        });
+    }).then(function(success) {
+        gutil.log(gutil.colors.green('Lambda functions uploaded correctly'));
         done();
     }, function(err) {
         gutil.log(gutil.colors.red(err));
@@ -130,48 +127,62 @@ gulp.task('deployApi', function(done) {
     const api = new AWS.APIGateway();
 
     const promise = new BlueBird(function(resolve, reject) {
-        fs.readFile('swagger.yml', function(err, data) {
+        fs.readFile('swagger.yml', function(err, swaggerFile) {
             if (err) {
                 return reject(err);
             }
-            const params = {
-                body: data,
-                failOnWarnings: true
-            };
-            api.getRestApis({}, function(err, data) {
+            api.getRestApis({}, function(err, apis) {
                 if (err) {
                     return reject(err);
                 }
-                const filterApi = data.items.filter(function(api) {
+                const filterApi = apis.items.filter(function(api) {
                     return api.name === apiName;
                 })[0];
 
                 if (filterApi) {
-                    const deleteParams = {
-                        restApiId: filterApi.id
+                    const putApiParams = {
+                        body: swaggerFile,
+                        restApiId: filterApi.id,
+                        failOnWarnings: true,
+                        mode: 'overwrite'
                     };
-                    api.deleteRestApi(deleteParams, function(err, data) {
+                    api.putRestApi(putApiParams, function(err, updatedApi) {
                         if (err) {
                             return reject(err);
                         }
-                        api.importRestApi(params, function(err, data) {
+                        const deploymentParams = {
+                            restApiId: updatedApi.id,
+                            stageName: 'beta'
+                        };
+                        api.createDeployment(deploymentParams, function(err, deploymentData) {
                             if (err) {
                                 return reject(err);
                             }
-                            return resolve('Updated API Successfully');
+                            return resolve('Deployed Updated API Successfully');
                         });
-                    });
+                    })
                 } else {
-                    api.importRestApi(params, function(err, data) {
+                    const importRestApiParams = {
+                        body: swaggerFile,
+                        failOnWarnings: true
+                    };
+                    api.importRestApi(importRestApiParams, function(err, apiData) {
                         if (err) {
                             return reject(err);
                         }
-                        return resolve('Imported API Successfully');
+                        const deploymentParams = {
+                            restApiId: apiData.id,
+                            stageName: 'beta'
+                        };
+                        api.createDeployment(deploymentParams, function(err, deploymentData) {
+                            if (err) {
+                                return reject(err);
+                            }
+                            return resolve('Deployed API Successfully');
+                        });
                     });
                 }
-
             });
-
         });
     });
 
@@ -186,14 +197,14 @@ gulp.task('deployApi', function(done) {
 
 gulp.task('default', function(callback) {
     return runSequence(
-        ['clean'], ['compile-src'], ['npm'], ['zip'], ['upload'],
+        ['clean'], ['compile-src'], ['npm'], ['zip'],
         callback
     );
 });
 
 gulp.task('deploy', function(callback) {
     return runSequence(
-        ['deployApi'],
+        ['deployApi'], ['upload'],
         callback
     );
 })
