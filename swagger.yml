@@ -1,0 +1,63 @@
+---
+swagger: '2.0'
+info:
+  title: aws-lambda-project-boilerplate
+  description: aws lambda api
+  version: 1.0.0
+schemes:
+- https
+basePath: "/v1"
+produces:
+- application/json
+paths:
+  "/greeter":
+    post:
+      summary: Greeter function
+      description: |
+        greeter endpoint
+      parameters:
+      - name: name
+        in: body
+        description: name
+        required: true
+        "schema":
+            "$ref": "#/definitions/nameModel"
+      tags:
+      - Greeter
+      responses:
+        '200':
+          description: a string
+          headers:
+            test-method-response-header:
+              type: string
+        '400':
+          description: a string
+          headers:
+            test-method-response-header:
+              type: string
+      x-amazon-apigateway-auth:
+        type: none
+      x-amazon-apigateway-integration:
+        type: aws
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:487799950875:function:greeter/invocations
+        httpMethod: POST
+        credentials: arn:aws:iam::487799950875:role/lambda-gateway-execution-role
+        requestParameters:
+          integration.request.path.integrationPathParam: method.request.body.name
+        cacheNamespace: cache namespace
+        cacheKeyParameters: []
+        responses:
+          2\\d{2}:
+             statusCode: '400'
+             responseParameters:
+               method.response.header.test-method-response-header: integration.response.header.integrationResponseHeaderParam1
+          default:
+              statusCode: '200'
+              responseParameters:
+                method.response.header.test-method-response-header: integration.response.header.integrationResponseHeaderParam1
+definitions:
+  nameModel:
+    properties:
+      name:
+        type: string
+        description: name
