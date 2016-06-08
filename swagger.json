@@ -54,7 +54,7 @@
                 },
                 "x-amazon-apigateway-integration": {
                     "type": "aws",
-                    "uri": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:<<ACCT_ID>>:function:greeter/invocations",
+                    "uri": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:<<ACCT_ID>>:function:aws-lambda-project-boilerplate_greeter/invocations",
                     "httpMethod": "POST",
                     "credentials": "arn:aws:iam::<<ACCT_ID>>:role/lambda-gateway-execution-role",
                     "requestParameters": {

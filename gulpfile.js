@@ -140,7 +140,7 @@ gulp.task('upload', function(done) {
     BlueBird.map(listChildDirectoryPaths(functionsPath), function(directoryPath) {
         return fs.readFileAsync('dist/' + directoryPath + '/dist.zip').then(function(lambdaCode) {
             const lambdaFunctionParams = {
-                FunctionName: directoryPath,
+                FunctionName: `${apiName}_${directoryPath}`,
                 Handler: 'handler.handler',
                 Role: `arn:aws:iam::${config.awsAccountNumber}:role/${config.lambdaRole}`,
                 Runtime: 'nodejs4.3',
