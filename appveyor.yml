@@ -1,0 +1,29 @@
+environment:
+  environment: dev
+  matrix:
+      - nodejs_version: "4"
+
+version: 0.0.{build}
+shallow_clone: true
+branches:
+  only:
+    - develop
+
+ cache:
+    - node_modules
+
+install:
+  - node --version
+  - npm -g install npm@2
+  - set PATH=%APPDATA%\npm;%PATH%
+  - npm install -g gulp
+
+build_script:
+  - gulp
+
+deploy_script:
+  - gulp deploy
+
+notifications:
+  - provider: Webhook
+    url: http://appharborservicehookendpoint.apphb.com/build/appveyor/lambda-boilerplate
