@@ -127,7 +127,7 @@ gulp.task('upload', function(done) {
         done();
     }, function(err) {
         gutil.log(gutil.colors.red(err));
-        done();
+        throw new gutil.PluginError(err);
     });
 });
 
@@ -197,7 +197,7 @@ gulp.task('deployApi', function(done) {
         done();
     }, function(err) {
         gutil.log(gutil.colors.red(err));
-        done();
+        throw new gutil.PluginError(err);
     });
 });
 
