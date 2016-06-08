@@ -7,7 +7,7 @@ let expect = chai.expect;
 chai.use(sinonChai);
 
 import { Greeter } from '../../src/greeter/greeter';
-import handler from '../../src/greeter/handler';
+import { handler } from '../../src/greeter/handler';
 
 describe('handler', () => {
     describe('when handling a greet event', () => {

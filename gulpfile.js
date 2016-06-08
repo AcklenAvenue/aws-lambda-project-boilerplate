@@ -5,18 +5,24 @@ var rename = require('gulp-rename');
 var install = require('gulp-install');
 var zip = require('gulp-zip');
 var AWS = require('aws-sdk');
+var spawn = require('gulp-spawn');
 var runSequence = require('run-sequence');
 var newer = require('gulp-newer');
 var tsc = require('gulp-typescript');
 var debug = require('gulp-debug');
+var clean = require('gulp-clean');
 var merge = require('merge-stream');
 var path = require('path');
+var mocha = require('gulp-mocha');
+var istanbul = require('gulp-istanbul');
 var BlueBird = require('bluebird');
 var config = require('./gulp.config');
 var swagger = require('./swagger.json');
 var fs = BlueBird.promisifyAll(require('fs'));
+var os = require('os');
 
 const functionsPath = './src';
+const testsPath = './tests';
 const accountIDPattern = /<<ACCT_ID>>/g;
 const apiName = path.basename(__dirname);
 swagger.info.title = apiName;
@@ -33,32 +39,81 @@ const listChildDirectoryPaths = function(directoryPath) {
     });
 }
 
-const compileTypescript = function() {
-    const lambdas = listChildDirectoryPaths(functionsPath).map(function(directoryPath) {
-        return gulp.src([functionsPath + '/' + directoryPath + '/**/*.ts', '!' + directoryPath + '/**/*.d.ts'])
+const compileTypescript = function(srcPath) {
+    const lambdas = listChildDirectoryPaths(srcPath).map(function(directoryPath) {
+        return gulp.src([srcPath + '/' + directoryPath + '/**/*.ts', '!' + directoryPath + '/**/*.d.ts'])
             .pipe(newer({
                 dest: 'dist/' + directoryPath,
                 ext: '.js'
             }))
             .pipe(tsc())
-            .pipe(gulp.dest('dist/' + directoryPath));
+            .pipe(gulp.dest('dist/' + directoryPath))
+            .pipe(gulp.dest('src/' + directoryPath));
     });
     return merge(lambdas);
 };
 
-gulp.task('compile-src', function() {
-    return compileTypescript();
+const compileTestsTypescript = function(srcPath) {
+    return gulp.src([srcPath + '/**/*.ts', '!' + srcPath + '/**/*.d.ts'])
+        .pipe(newer({
+            dest: srcPath,
+            ext: '.js'
+        }))
+        .pipe(tsc())
+        .pipe(gulp.dest(srcPath));
+};
+
+gulp.task('install-typings', function(done) {
+    spawn.simple({
+        cmd: 'npm' + (os.platform().match(/^win/) ? '.cmd' : ''),
+        args: [
+            'run',
+            'typings'
+        ]
+    }, done);
 });
 
-// First we need to clean out the dist folder and remove the compiled zip file.
-gulp.task('clean', function(cb) {
+gulp.task('istanbul-setup', ['compile-src'], function () {
+  return gulp.src([`dist/${functionsPath}/**/*.js`])
+    .pipe(istanbul())
+    .pipe(istanbul.hookRequire());
+});
+
+gulp.task('test', ['compile-tests', 'istanbul-setup'], function() {
+    return gulp.src(['tests/**/*.js'], {
+            read: false
+        })
+        .pipe(mocha())
+        .pipe(istanbul.writeReports());
+});
+
+gulp.task('compile-tests', function() {
+    return compileTestsTypescript(testsPath);
+});
+
+gulp.task('compile-src', function() {
+    return compileTypescript(functionsPath);
+});
+
+gulp.task('clean-tests', function() {
+    return gulp.src(['tests/**/*.js', 'tests/**/*.d.ts'])
+        .pipe(clean());
+});
+
+gulp.task('clean-src', function() {
+    return gulp.src(['src/**/*.js', 'src/**/*.d.ts'])
+        .pipe(clean());
+});
+
+gulp.task('delete-dist', function(cb) {
     return del('./dist', cb);
 });
 
-// Here we want to install npm packages to dist, ignoring devDependencies.
+gulp.task('clean', ['delete-dist', 'clean-src', 'clean-tests']);
+
 gulp.task('npm', function() {
     var tasks = listChildDirectoryPaths(functionsPath).map(function(directoryPath) {
-        return gulp.src('./package.json')
+        return gulp.src(`${functionsPath}/${directoryPath}/package.json`)
             .pipe(gulp.dest('dist/' + directoryPath))
             .pipe(install({
                 production: true
@@ -67,7 +122,6 @@ gulp.task('npm', function() {
     return merge(tasks);
 });
 
-// Now the dist directory is ready to go. Zip it.
 gulp.task('zip', function() {
     const lambdas = listChildDirectoryPaths(functionsPath).map(function(directoryPath) {
         return gulp.src(['dist/' + directoryPath + '/**/*', '!dist/' + directoryPath + 'package.json'])
@@ -127,7 +181,7 @@ gulp.task('upload', function(done) {
         done();
     }, function(err) {
         gutil.log(gutil.colors.red(err));
-        throw new gutil.PluginError(err);
+        throw new gutil.PluginError('AWS Lambda', err);
     });
 });
 
@@ -197,13 +251,13 @@ gulp.task('deployApi', function(done) {
         done();
     }, function(err) {
         gutil.log(gutil.colors.red(err));
-        throw new gutil.PluginError(err);
+        throw new gutil.PluginError('AWS Gateway Api', err);
     });
 });
 
 gulp.task('default', function(callback) {
     return runSequence(
-        ['clean'], ['compile-src'], ['npm'], ['zip'],
+        ['clean'], ['compile-src'], ['test'], ['npm'], ['zip'],
         callback
     );
 });
