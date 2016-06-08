@@ -63,30 +63,6 @@ const compileTestsTypescript = function(srcPath) {
         .pipe(gulp.dest(srcPath));
 };
 
-gulp.task('install-typings', function(done) {
-    spawn.simple({
-        cmd: 'npm' + (os.platform().match(/^win/) ? '.cmd' : ''),
-        args: [
-            'run',
-            'typings'
-        ]
-    }, done);
-});
-
-gulp.task('istanbul-setup', ['compile-src'], function () {
-  return gulp.src([`dist/${functionsPath}/**/*.js`])
-    .pipe(istanbul())
-    .pipe(istanbul.hookRequire());
-});
-
-gulp.task('test', ['compile-tests', 'istanbul-setup'], function() {
-    return gulp.src(['tests/**/*.js'], {
-            read: false
-        })
-        .pipe(mocha())
-        .pipe(istanbul.writeReports());
-});
-
 gulp.task('compile-tests', function() {
     return compileTestsTypescript(testsPath);
 });
@@ -110,6 +86,30 @@ gulp.task('delete-dist', function(cb) {
 });
 
 gulp.task('clean', ['delete-dist', 'clean-src', 'clean-tests']);
+
+gulp.task('install-typings', function(done) {
+    spawn.simple({
+        cmd: 'npm' + (os.platform().match(/^win/) ? '.cmd' : ''),
+        args: [
+            'run',
+            'typings'
+        ]
+    }, done);
+});
+
+gulp.task('istanbul-setup', ['compile-src'], function () {
+  return gulp.src([`dist/${functionsPath}/**/*.js`])
+    .pipe(istanbul())
+    .pipe(istanbul.hookRequire());
+});
+
+gulp.task('test', ['compile-tests', 'istanbul-setup'], function() {
+    return gulp.src(['tests/**/*.js'], {
+            read: false
+        })
+        .pipe(mocha())
+        .pipe(istanbul.writeReports());
+});
 
 gulp.task('npm', function() {
     var tasks = listChildDirectoryPaths(functionsPath).map(function(directoryPath) {
