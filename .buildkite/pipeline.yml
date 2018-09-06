@@ -1,0 +1,9 @@
+steps:
+  - name: ':rocket: Deploy'
+    command: '/.buildkite/deploy.sh'
+    env:
+      BUILDKITE_DOCKER_COMPOSE_CONTAINER: lambda-service
+      BUILDKITE_DOCKER_COMPOSE_FILE: docker-compose.yml
+    branches: 'develop staging master'
+    agents:
+      queue: 'elastic'   
