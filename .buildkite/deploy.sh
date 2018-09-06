@@ -2,4 +2,4 @@
 
 set -eo pipefail
 echo "--- Deploy to $BUILDKITE_BRANCH"
-serverless deploy
+serverless deploy --stage $BUILDKITE_BRANCH
