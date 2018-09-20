@@ -1,0 +1,28 @@
+version: '2'
+services:
+  lambda-service:
+    build:
+      context: .
+    volumes:
+      - .:/usr/service
+      - /usr/bin/buildkite-agent:/usr/bin/buildkite-agent
+      - /usr/service/node_modules
+    environment:
+      - BUILDKITE_AGENT_ACCESS_TOKEN
+      - BUILDKITE_JOB_ID
+      - BUILDKITE_BUILD_ID
+      - BUILDKITE_BUILD_NUMBER
+      - BUILDKITE_PULL_REQUEST
+      - BUILDKITE_BRANCH
+      - GITHUB_ACCESS_TOKEN
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+      - AWS_ACCESS_KEY_ID_PROD
+      - AWS_SECRET_ACCESS_KEY_PROD
+      - ENVIRONMENT
+      - NODE_ENV
+      - APPNAME_PROD
+      - APPNAME
+      - APPVERSION
+      - AWS_REGION_PROD
+      - AWS_REGION

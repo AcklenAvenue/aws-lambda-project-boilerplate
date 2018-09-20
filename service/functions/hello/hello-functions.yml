@@ -1,0 +1,2 @@
+hello:
+  handler: handler.hello
