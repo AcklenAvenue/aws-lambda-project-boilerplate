@@ -1,8 +1,6 @@
 #!/bin/bash
 
 set -eo pipefail
-echo "--- PRINT ENV"
-env
 echo "--- Deploy to $BUILDKITE_BRANCH"
 cd service
 if [[ "$BUILDKITE_BRANCH" == "develop" ]]; then
